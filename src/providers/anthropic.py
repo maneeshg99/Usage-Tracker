@@ -162,60 +162,75 @@ class AnthropicProvider(UsageProvider):
 
     # ── helpers ──────────────────────────────────────────────────────
 
+    # Maps API keys → human-readable labels
+    _TIER_LABELS = {
+        "five_hour": "Current Session (5h)",
+        "seven_day": "Weekly Usage",
+        "seven_day_opus": "Weekly Opus",
+        "seven_day_sonnet": "Weekly Sonnet",
+        "seven_day_cowork": "Weekly Cowork",
+        "iguana_necktie": "Extended Thinking",
+    }
+
     def _parse_usage_data(self, data: dict) -> ProviderUsage:
-        """Parse the claude.ai usage endpoint response."""
+        """Parse the claude.ai /usage endpoint response.
+
+        Actual response shape (as of 2026-03):
+        {
+          "five_hour":        {"utilization": 2.0, "resets_at": "..."},
+          "seven_day":        {"utilization": 3.0, "resets_at": "..."},
+          "seven_day_sonnet": {"utilization": 0.0, "resets_at": "..."},
+          "seven_day_opus":   null,
+          "extra_usage":      {"is_enabled": false, ...},
+          ...
+        }
+        `utilization` is a 0-100 percentage.
+        """
         tiers = []
-        now = datetime.now(timezone.utc)
 
-        # The claude.ai usage endpoint may return different structures.
-        # We handle the common patterns.
+        for key, label in self._TIER_LABELS.items():
+            tier_data = data.get(key)
+            if tier_data is None:
+                continue
 
-        # Pattern: daily message limit
-        if "daily_usage" in data or "messageLimit" in data:
-            msg_used = data.get("messagesUsed", data.get("daily_usage", {}).get("used", 0))
-            msg_limit = data.get("messageLimit", data.get("daily_usage", {}).get("limit", 0))
-            if msg_limit > 0:
-                pct = msg_used / msg_limit * 100
-                reset_time = data.get("resetTime") or data.get("daily_usage", {}).get("reset_at")
-                reset_dt = None
-                if reset_time:
-                    try:
-                        reset_dt = datetime.fromisoformat(str(reset_time).replace("Z", "+00:00"))
-                    except (ValueError, TypeError):
-                        pass
-                tiers.append(UsageTier(
-                    label="Daily Usage",
-                    used_percent=pct,
-                    reset_at=reset_dt,
-                    detail=f"{msg_used} / {msg_limit} messages",
-                ))
-
-        # Pattern: has explicit tiers
-        for tier_data in data.get("tiers", data.get("limits", [])):
-            label = tier_data.get("label", tier_data.get("name", "Usage"))
-            used = tier_data.get("used", 0)
-            limit = tier_data.get("limit", 0)
-            pct = (used / limit * 100) if limit > 0 else 0
-            reset_raw = tier_data.get("reset_at") or tier_data.get("resetsAt")
+            pct = tier_data.get("utilization", 0.0)
+            reset_raw = tier_data.get("resets_at")
             reset_dt = None
             if reset_raw:
                 try:
-                    reset_dt = datetime.fromisoformat(str(reset_raw).replace("Z", "+00:00"))
+                    reset_dt = datetime.fromisoformat(
+                        str(reset_raw).replace("Z", "+00:00")
+                    )
                 except (ValueError, TypeError):
                     pass
+
             tiers.append(UsageTier(
                 label=label,
                 used_percent=pct,
                 reset_at=reset_dt,
-                detail=f"{used} / {limit}",
+                detail=f"{pct:.0f}% used",
+            ))
+
+        # Extra / overage usage
+        extra = data.get("extra_usage")
+        if extra and extra.get("is_enabled"):
+            used = extra.get("used_credits") or 0
+            limit = extra.get("monthly_limit") or 0
+            pct = extra.get("utilization") or 0.0
+            detail = f"${used:.2f}"
+            if limit:
+                detail += f" / ${limit:.2f}"
+            tiers.append(UsageTier(
+                label="Extra Usage Credits",
+                used_percent=pct,
+                detail=detail,
             ))
 
         if not tiers:
-            # Fallback: show raw data summary
             tiers.append(UsageTier(
                 label="Usage",
                 used_percent=0,
-                detail="Connected – parsing usage data",
+                detail="Connected – no usage tiers found",
             ))
 
         return ProviderUsage(provider_name=self.name, tiers=tiers)
