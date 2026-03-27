@@ -17,24 +17,24 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from . import config
+from . import auth, config
 from .styles import SETTINGS_THEME
 
 SESSION_TOKEN_HELP = {
     "anthropic": (
-        "How to get your Anthropic session token:\n"
+        "Manual fallback — how to get your session token:\n"
         "1. Log in to claude.ai in your browser\n"
-        "2. Open DevTools (F12) → Application tab\n"
-        "3. Under Cookies → claude.ai, find 'sessionKey'\n"
-        "4. Copy the full value and paste it here"
+        "2. Open DevTools (F12) -> Application tab\n"
+        "3. Under Cookies -> claude.ai, find 'sessionKey'\n"
+        "4. Copy the full value and paste it above"
     ),
     "openai": (
-        "How to get your OpenAI session token:\n"
+        "Manual fallback — how to get your session token:\n"
         "1. Log in to chatgpt.com in your browser\n"
-        "2. Open DevTools (F12) → Application tab\n"
-        "3. Under Cookies → chatgpt.com, find\n"
+        "2. Open DevTools (F12) -> Application tab\n"
+        "3. Under Cookies -> chatgpt.com, find\n"
         "   '__Secure-next-auth.session-token'\n"
-        "4. Copy the full value and paste it here"
+        "4. Copy the full value and paste it above"
     ),
 }
 
@@ -43,8 +43,8 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Usage Tracker Settings")
-        self.setMinimumWidth(420)
-        self.setMinimumHeight(480)
+        self.setMinimumWidth(440)
+        self.setMinimumHeight(520)
         self.setStyleSheet(SETTINGS_THEME)
         self._build_ui()
         self._load_current()
@@ -105,21 +105,52 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(tab)
         layout.setSpacing(10)
 
-        # Auth type
+        # ── Auto-extract section (primary) ──────────────────────────
+        auto_label = QLabel("Recommended: auto-extract from your browser")
+        auto_label.setObjectName("SectionLabel")
+        layout.addWidget(auto_label)
+
+        auto_desc = QLabel(
+            "If you're logged in to "
+            + ("claude.ai" if provider_key == "anthropic" else "chatgpt.com")
+            + " in Chrome, Edge, or Firefox,\nclick below to import your session automatically."
+        )
+        auto_desc.setWordWrap(True)
+        auto_desc.setStyleSheet("color: #999; font-size: 11px;")
+        layout.addWidget(auto_desc)
+
+        auto_btn = QPushButton("Auto-Extract from Browser")
+        auto_btn.setObjectName("SaveBtn")  # reuse green style
+        auto_btn.setStyleSheet(
+            "QPushButton { background-color: #2d6a4f; padding: 10px; font-size: 13px; }"
+            "QPushButton:hover { background-color: #3d8a6f; }"
+        )
+        layout.addWidget(auto_btn)
+
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+        self._status_label.setStyleSheet("font-size: 11px;")
+        layout.addWidget(self._status_label)
+
+        # ── Divider ─────────────────────────────────────────────────
+        divider = QLabel("— or configure manually —")
+        divider.setAlignment(Qt.AlignCenter)
+        divider.setStyleSheet("color: #555; font-size: 10px; padding: 6px 0;")
+        layout.addWidget(divider)
+
+        # ── Auth type ───────────────────────────────────────────────
         auth_row = QHBoxLayout()
         auth_label = QLabel("Auth method:")
         auth_combo = QComboBox()
-        auth_combo.addItems(["API Key", "Session Token"])
+        auth_combo.addItems(["Session Token", "API Key"])
         auth_row.addWidget(auth_label)
         auth_row.addWidget(auth_combo)
         layout.addLayout(auth_row)
 
         # Credential input
-        cred_label = QLabel("Credential:")
         cred_input = QLineEdit()
         cred_input.setEchoMode(QLineEdit.Password)
-        cred_input.setPlaceholderText("Paste your API key or session token here...")
-        layout.addWidget(cred_label)
+        cred_input.setPlaceholderText("Paste your session token here...")
         layout.addWidget(cred_input)
 
         # Show/hide toggle
@@ -135,24 +166,23 @@ class SettingsDialog(QDialog):
         )
         layout.addWidget(show_btn)
 
-        # Help text
+        # Help text (shown for session token mode)
         help_text = QTextEdit()
         help_text.setReadOnly(True)
-        help_text.setMaximumHeight(120)
+        help_text.setMaximumHeight(100)
         help_text.setPlainText(SESSION_TOKEN_HELP.get(provider_key, ""))
         layout.addWidget(help_text)
 
-        # Update help text when auth type changes
         def on_auth_changed(index):
-            if index == 1:  # Session Token
+            if index == 0:  # Session Token
                 help_text.setVisible(True)
                 cred_input.setPlaceholderText("Paste your session token here...")
-            else:
+            else:  # API Key
                 help_text.setVisible(False)
                 cred_input.setPlaceholderText("Paste your API key here...")
 
         auth_combo.currentIndexChanged.connect(on_auth_changed)
-        help_text.setVisible(auth_combo.currentIndex() == 1)
+        help_text.setVisible(auth_combo.currentIndex() == 0)
 
         # Delete config button
         delete_btn = QPushButton("Remove Configuration")
@@ -162,12 +192,36 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
 
+        # Wire up auto-extract button
+        auto_btn.clicked.connect(lambda: self._auto_extract(provider_key, cred_input))
+
         # Store references
         tab.auth_combo = auth_combo
         tab.cred_input = cred_input
         tab.provider_key = provider_key
 
         return tab
+
+    def _auto_extract(self, provider_key: str, cred_input: QLineEdit):
+        """Attempt to auto-extract session token from browser cookies."""
+        token, info = auth.extract_token(provider_key)
+        if token:
+            cred_input.setText(token)
+            # Set auth type to Session Token
+            tab = self._anthropic_tab if provider_key == "anthropic" else self._openai_tab
+            tab.auth_combo.setCurrentIndex(0)  # Session Token
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Session token extracted from {info}!\n\n"
+                "Click Save to apply.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Auto-Extract Failed",
+                info or "Could not find session token.",
+            )
 
     def _load_current(self):
         """Load existing config into the dialog."""
@@ -179,8 +233,10 @@ class SettingsDialog(QDialog):
         ]:
             prov = config.get_provider(key)
             if prov:
-                idx = 1 if prov["auth_type"] == "session_token" else 0
-                tab.auth_combo.setCurrentIndex(idx)
+                if prov["auth_type"] == "api_key":
+                    tab.auth_combo.setCurrentIndex(1)
+                else:
+                    tab.auth_combo.setCurrentIndex(0)
                 tab.cred_input.setText(prov["credential"])
 
     def _save(self):
@@ -193,7 +249,7 @@ class SettingsDialog(QDialog):
         ]:
             cred = tab.cred_input.text().strip()
             if cred:
-                auth_type = "session_token" if tab.auth_combo.currentIndex() == 1 else "api_key"
+                auth_type = "api_key" if tab.auth_combo.currentIndex() == 1 else "session_token"
                 config.save_provider(key, auth_type, cred)
 
         self.accept()
