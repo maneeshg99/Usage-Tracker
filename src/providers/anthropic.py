@@ -8,6 +8,27 @@ import requests
 from .base import ProviderUsage, UsageProvider, UsageTier
 
 
+def _browser_headers(cookie: str) -> dict:
+    """Headers that mimic a real browser session on claude.ai."""
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) "
+            "Gecko/20100101 Firefox/115.0"
+        ),
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Content-Type": "application/json",
+        "Referer": "https://claude.ai/chats",
+        "Origin": "https://claude.ai",
+        "Cookie": cookie,
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "Connection": "keep-alive",
+        "DNT": "1",
+    }
+
+
 class AnthropicProvider(UsageProvider):
     name = "Anthropic (Claude)"
 
@@ -28,11 +49,15 @@ class AnthropicProvider(UsageProvider):
     # ── session-token path (claude.ai consumer) ────────────────────
 
     def _fetch_via_session(self, session_key: str) -> ProviderUsage:
-        headers = {
-            "Cookie": f"sessionKey={session_key}",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json",
-        }
+        # Build cookie string – if user pasted just the value, wrap it
+        if session_key.startswith("sk-ant-"):
+            cookie = f"sessionKey={session_key}"
+        elif "sessionKey=" in session_key:
+            cookie = session_key  # User pasted the full cookie header
+        else:
+            cookie = f"sessionKey={session_key}"
+
+        headers = _browser_headers(cookie)
 
         # Step 1: get org id
         org_resp = requests.get(
