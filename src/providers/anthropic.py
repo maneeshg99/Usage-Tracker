@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+from .. import http_client
 from .base import ProviderUsage, UsageProvider, UsageTier
 
 
@@ -59,8 +60,8 @@ class AnthropicProvider(UsageProvider):
 
         headers = _browser_headers(cookie)
 
-        # Step 1: get org id
-        org_resp = requests.get(
+        # Step 1: get org id (uses curl_cffi to bypass TLS fingerprinting)
+        org_resp = http_client.get(
             "https://claude.ai/api/organizations",
             headers=headers,
             timeout=15,
@@ -72,7 +73,7 @@ class AnthropicProvider(UsageProvider):
         org_id = orgs[0].get("uuid") or orgs[0].get("id")
 
         # Step 2: fetch usage / rate-limit info
-        usage_resp = requests.get(
+        usage_resp = http_client.get(
             f"https://claude.ai/api/organizations/{org_id}/usage",
             headers=headers,
             timeout=15,

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+from .. import http_client
 from .base import ProviderUsage, UsageProvider, UsageTier
 
 
@@ -44,7 +45,7 @@ class OpenAIProvider(UsageProvider):
             "Connection": "keep-alive",
         }
 
-        resp = requests.get(
+        resp = http_client.get(
             "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27",
             headers=headers,
             timeout=15,
