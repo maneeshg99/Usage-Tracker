@@ -1,10 +1,12 @@
 """Application entry point – wires together the widget, providers, and config."""
 
+import os
 import sys
 import threading
 from typing import Optional
 
 from PyQt5.QtCore import QTimer, pyqtSignal, QObject
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 
 from . import config
@@ -12,7 +14,7 @@ from .providers.anthropic import AnthropicProvider
 from .providers.openai_provider import OpenAIProvider
 from .providers.base import ProviderUsage
 from .settings_dialog import SettingsDialog
-from .widget import UsageWidget
+from .widget import UsageWidget, _icon_path
 
 
 PROVIDERS = {
@@ -45,6 +47,11 @@ class App:
     def __init__(self):
         self._app = QApplication(sys.argv)
         self._app.setApplicationName("LLM Usage Tracker")
+
+        # Set app-wide icon (taskbar, alt-tab, window switcher)
+        icon_file = _icon_path()
+        if os.path.exists(icon_file):
+            self._app.setWindowIcon(QIcon(icon_file))
 
         self._widget = UsageWidget()
         self._fetcher = UsageFetcher()

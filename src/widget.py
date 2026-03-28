@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from PyQt5.QtCore import Qt, QPoint, QSize, QRect, pyqtSignal
-from PyQt5.QtGui import QFont, QCursor, QPainter, QColor, QPen
+from PyQt5.QtGui import QFont, QCursor, QPainter, QColor, QPen, QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QFrame,
@@ -19,8 +19,20 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+import os
+import sys
+
 from .providers.base import ProviderUsage, UsageTier
 from .styles import DARK_THEME, progress_bar_color, progress_bar_glow
+
+
+def _icon_path() -> str:
+    """Resolve icon path whether running from source or PyInstaller bundle."""
+    if getattr(sys, "_MEIPASS", None):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, "assets", "icon.png")
 
 _RESIZE_MARGIN = 14  # px edge zone for resize handles
 
@@ -38,10 +50,14 @@ class UsageWidget(QWidget):
         self.setWindowFlags(
             Qt.FramelessWindowHint
             | Qt.WindowStaysOnTopHint
-            | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet(DARK_THEME)
+
+        # App icon — shows in taskbar and title bar
+        icon_file = _icon_path()
+        if os.path.exists(icon_file):
+            self.setWindowIcon(QIcon(icon_file))
         self.setMinimumSize(280, 200)
         self.resize(340, 420)
         self.setMouseTracking(True)  # Get mouseMoveEvent without button held

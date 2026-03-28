@@ -8,6 +8,7 @@ Usage:
 Produces: dist/LLM-Usage-Tracker.exe (Windows) or dist/LLM-Usage-Tracker (Linux/Mac)
 """
 
+import os
 import PyInstaller.__main__
 import platform
 import sys
@@ -17,6 +18,8 @@ args = [
     "--onefile",
     "--name=LLM-Usage-Tracker",
     "--windowed",
+    # Bundle the icon assets into the executable
+    "--add-data=assets:assets",
     # Hidden imports that PyInstaller can miss
     "--hidden-import=curl_cffi",
     "--hidden-import=curl_cffi.requests",
@@ -38,9 +41,15 @@ args = [
     "--noconfirm",
 ]
 
-# Windows-specific: add icon if available
+# Windows: use .ico for taskbar icon
 if platform.system() == "Windows":
-    args.append("--icon=NONE")
+    ico = os.path.join("assets", "icon.ico")
+    if os.path.exists(ico):
+        args.append(f"--icon={ico}")
+    # Windows uses ; as path separator in --add-data
+    for i, a in enumerate(args):
+        if a.startswith("--add-data="):
+            args[i] = a.replace(":", ";", 1)
 
 print(f"Building for {platform.system()} {platform.machine()}...")
 print(f"Python {sys.version}")
