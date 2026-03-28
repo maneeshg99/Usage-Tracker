@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
 from .providers.base import ProviderUsage, UsageTier
 from .styles import DARK_THEME, progress_bar_color, progress_bar_glow
 
-_RESIZE_MARGIN = 6  # px edge zone for resize handles
+_RESIZE_MARGIN = 14  # px edge zone for resize handles
 
 
 class UsageWidget(QWidget):
@@ -130,7 +130,7 @@ class UsageWidget(QWidget):
 
         # Outer layout to position _bg inside self
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(4, 4, 4, 4)  # shadow margin
+        outer.setContentsMargins(6, 6, 6, 6)  # shadow margin + resize breathing room
         outer.addWidget(self._bg)
 
         # Placeholder
