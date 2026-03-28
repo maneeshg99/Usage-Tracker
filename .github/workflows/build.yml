@@ -1,0 +1,70 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: LLM-Usage-Tracker.exe
+          - os: macos-latest
+            artifact: LLM-Usage-Tracker
+          - os: ubuntu-latest
+            artifact: LLM-Usage-Tracker
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: python build_exe.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LLM-Usage-Tracker-${{ runner.os }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Rename platform binaries
+        run: |
+          mkdir release
+          cp artifacts/LLM-Usage-Tracker-Windows/LLM-Usage-Tracker.exe release/LLM-Usage-Tracker-Windows.exe
+          cp artifacts/LLM-Usage-Tracker-macOS/LLM-Usage-Tracker release/LLM-Usage-Tracker-macOS
+          cp artifacts/LLM-Usage-Tracker-Linux/LLM-Usage-Tracker release/LLM-Usage-Tracker-Linux
+          chmod +x release/LLM-Usage-Tracker-macOS release/LLM-Usage-Tracker-Linux
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
