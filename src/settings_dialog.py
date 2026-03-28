@@ -54,14 +54,6 @@ class SettingsDialog(QDialog):
         layout.setSpacing(12)
 
         tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #3a3a5a; border-radius: 6px; }
-            QTabBar::tab {
-                background: #2a2a4a; color: #ccc; padding: 8px 16px;
-                border-top-left-radius: 6px; border-top-right-radius: 6px;
-            }
-            QTabBar::tab:selected { background: #3a3a6a; color: #fff; }
-        """)
 
         # Anthropic tab
         self._anthropic_tab = self._create_provider_tab("anthropic")
