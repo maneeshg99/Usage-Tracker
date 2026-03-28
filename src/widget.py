@@ -44,6 +44,7 @@ class UsageWidget(QWidget):
         self.setStyleSheet(DARK_THEME)
         self.setMinimumSize(280, 200)
         self.resize(340, 420)
+        self.setMouseTracking(True)  # Get mouseMoveEvent without button held
 
         self._drag_pos: QPoint | None = None
         self._last_updated: datetime | None = None
@@ -51,6 +52,8 @@ class UsageWidget(QWidget):
         self._resize_edge = None
 
         self._build_ui()
+        # Enable mouse tracking on the background frame too so events propagate
+        self._enable_mouse_tracking(self)
 
     # ── UI construction ─────────────────────────────────────────────
 
@@ -166,6 +169,8 @@ class UsageWidget(QWidget):
         self._status_label.setText(
             f"Updated {self._last_updated.strftime('%H:%M:%S')}"
         )
+        # New child widgets need mouse tracking for edge-resize cursors
+        self._enable_mouse_tracking(self)
 
     def set_loading(self):
         self._status_label.setText("Refreshing...")
@@ -279,6 +284,13 @@ class UsageWidget(QWidget):
         if hours > 0:
             return f"Resets in {hours}h {minutes}m"
         return f"Resets in {minutes}m"
+
+    @staticmethod
+    def _enable_mouse_tracking(widget: QWidget):
+        """Recursively enable mouse tracking so hover events propagate."""
+        widget.setMouseTracking(True)
+        for child in widget.findChildren(QWidget):
+            child.setMouseTracking(True)
 
     # ── painting (translucent background with rounded corners) ──────
 
